@@ -1,6 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Windows.Forms;
+using Microsoft.Web.WebView2;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
 
 namespace CaptureScreen {
     internal class SelectionForm : Form {
@@ -11,9 +15,9 @@ namespace CaptureScreen {
 
         private Pen pen;
 
-        private Panel panel;
+        private WebView2 webView2;
 
-        public SelectionForm(Bitmap bitmap) : base() {
+        public SelectionForm() {
             DoubleBuffered = true;
 
             pen = new Pen(Color.FromArgb(128, Color.Black), 5);
@@ -21,60 +25,57 @@ namespace CaptureScreen {
             Left = 0;
             Top = 0;
 
-            Width = bitmap.Width;
-            Height = bitmap.Height;
-
             FormBorderStyle = FormBorderStyle.None;
 
             StartPosition = FormStartPosition.Manual;
             AutoScaleMode = AutoScaleMode.Dpi;
 
-            PictureBox background = new PictureBox() {
-                Image = bitmap,
-
+            webView2 = new WebView2() {
                 Left = 0,
                 Top = 0,
 
-                Width = bitmap.Width,
-                Height = bitmap.Height
+                DefaultBackgroundColor = Color.Transparent
             };
 
-            background.MouseDown += SelectionForm_MouseDown;
-            background.MouseMove += SelectionForm_MouseMove;
-            background.MouseUp += SelectionForm_MouseUp;
-
-            Controls.Add(background);
-
-            panel = new Panel() {
-                BackColor = Color.Black,
-                Visible = false
+            webView2.CoreWebView2InitializationCompleted += (object? sender, CoreWebView2InitializationCompletedEventArgs e) => {
+                webView2.CoreWebView2.SetVirtualHostNameToFolderMapping("selection", Path.Combine(Program.Location, "UI/selection/"), CoreWebView2HostResourceAccessKind.DenyCors);
             };
 
-            background.Controls.Add(panel);
+            Controls.Add(webView2);
         }
 
-        private void SelectionForm_MouseDown(object? sender, MouseEventArgs e) {
-            mouseMoving = true;
+        public async Task<Rectangle> GetRectangleAsync(Bitmap image) {
+            TaskCompletionSource<Rectangle> task = new TaskCompletionSource<Rectangle>();
 
-            mouseStart = e.Location;
-            mouseCurrent = e.Location;
+            Size = image.Size;
+            webView2.Size = image.Size;
 
-            panel.Visible = true;
-        }
-        private void SelectionForm_MouseMove(object? sender, MouseEventArgs e) {
-            if (mouseMoving == false)
-                return;
+            BackgroundImage = image;
 
-            mouseCurrent = e.Location;
+            await webView2.EnsureCoreWebView2Async();
 
-            panel.Location = mouseStart;
-            panel.Size = new Size(mouseCurrent.X - mouseStart.X, mouseCurrent.Y - mouseStart.Y);
-        }
+            webView2.CoreWebView2.Navigate("https://selection/index.html");
 
-        private void SelectionForm_MouseUp(object? sender, MouseEventArgs e) {
-            panel.Visible = false;
+            webView2.NavigationCompleted += (object? sender, CoreWebView2NavigationCompletedEventArgs e) => {
+                Program.SelectionForm.Show();
 
-            mouseMoving = false;
+                webView2.NavigationStarting += (object? sender, CoreWebView2NavigationStartingEventArgs e) => {
+                    e.Cancel = true;
+
+                    Program.SelectionForm.Close();
+
+                    string[] result = e.Uri.Substring("result://".Length).Split(',');
+
+                    task.SetResult(new Rectangle(
+                        int.Parse(result[0]),
+                        int.Parse(result[1]),
+                        int.Parse(result[2]),
+                        int.Parse(result[3])
+                    ));
+                };
+            };
+
+            return await task.Task;
         }
     }
 }

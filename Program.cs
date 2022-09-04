@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Reflection;
 using System.Resources;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using Microsoft.Toolkit.Uwp.Notifications;
 using Microsoft.Web.WebView2;
@@ -16,18 +17,16 @@ namespace CaptureScreen {
 
         public static string Location = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
 
-
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        private static extern bool SetProcessDPIAware();
+        public static SelectionForm SelectionForm;
 
         [STAThread]
         static void Main() {
-            SetProcessDPIAware();
-
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
             Resources = new ResourceManager("CaptureScreen.Resources", Assembly.GetExecutingAssembly());
+
+            SelectionForm = new SelectionForm();
 
             Application.Run(new TrayApplicationContext());
         }
@@ -51,14 +50,40 @@ namespace CaptureScreen {
         }
 
         public static Bitmap GetScreenAsBitmap() {
-            Rectangle bounds = GetVirtualScreenBounds();
+            // Initialize the virtual screen to dummy values
+            int screenLeft = int.MaxValue;
+            int screenTop = int.MaxValue;
+            int screenRight = int.MinValue;
+            int screenBottom = int.MinValue;
 
-            Bitmap bitmap = new Bitmap(bounds.Width, bounds.Height);
+            // Enumerate system display devices
+            int deviceIndex = 0;
+            while (true) {
+                NativeUtilities.DisplayDevice deviceData = new NativeUtilities.DisplayDevice { cb = Marshal.SizeOf(typeof(NativeUtilities.DisplayDevice)) };
+                if (NativeUtilities.EnumDisplayDevices(null, deviceIndex, ref deviceData, 0) != 0) {
+                    // Get the position and size of this particular display device
+                    NativeUtilities.DEVMODE devMode = new NativeUtilities.DEVMODE();
+                    if (NativeUtilities.EnumDisplaySettings(deviceData.DeviceName, NativeUtilities.ENUM_CURRENT_SETTINGS, ref devMode)) {
+                        // Update the virtual screen dimensions
+                        screenLeft = Math.Min(screenLeft, devMode.dmPositionX);
+                        screenTop = Math.Min(screenTop, devMode.dmPositionY);
+                        screenRight = Math.Max(screenRight, devMode.dmPositionX + devMode.dmPelsWidth);
+                        screenBottom = Math.Max(screenBottom, devMode.dmPositionY + devMode.dmPelsHeight);
+                    }
+                    deviceIndex++;
+                }
+                else
+                    break;
+            }
 
-            using(Graphics graphics = Graphics.FromImage(bitmap))
-                graphics.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size);
+            // Create a bitmap of the appropriate size to receive the screen-shot.
+            Bitmap bmp = new Bitmap(screenRight - screenLeft, screenBottom - screenTop);
+               
+            // Draw the screen-shot into our bitmap.
+            using (Graphics g = Graphics.FromImage(bmp))
+                g.CopyFromScreen(screenLeft, screenTop, 0, 0, bmp.Size);
 
-            return bitmap;
+            return bmp;
         }
 
         public static Bitmap GetVirtualBitmap(Bitmap bitmap) {
@@ -68,46 +93,7 @@ namespace CaptureScreen {
         }
 
         public static async Task<Rectangle> GetSelectionAsync(Bitmap bitmap) {
-            var task = new TaskCompletionSource<Rectangle>();
-
-            SelectionForm form = new SelectionForm(bitmap);
-
-            form.Show();
-
-            /*WebView2 webView2 = new WebView2() {
-                Width = bitmap.Width,
-                Height = bitmap.Height,
-
-                DefaultBackgroundColor = Color.Transparent
-            };
-
-            form.Controls.Add(webView2);
-
-            await webView2.EnsureCoreWebView2Async();
-
-            webView2.CoreWebView2.SetVirtualHostNameToFolderMapping("selection", Path.Combine(Location, "UI/selection/"), CoreWebView2HostResourceAccessKind.DenyCors);
-            webView2.CoreWebView2.Navigate("https://selection/index.html");
-
-            webView2.NavigationCompleted += async (object? sender, CoreWebView2NavigationCompletedEventArgs e) => {
-                form.Show();
-
-                webView2.NavigationStarting += (object? sender, CoreWebView2NavigationStartingEventArgs e) => {
-                    form.Close();
-
-                    string[] result = e.Uri.Substring("result://".Length).Split(',');
-
-                    form.Dispose();
-
-                    task.SetResult(new Rectangle(
-                        int.Parse(result[0]),
-                        int.Parse(result[1]),
-                        int.Parse(result[2]),
-                        int.Parse(result[3])
-                    ));
-                };
-            };*/
-
-            return await task.Task;
+            return await Program.SelectionForm.GetRectangleAsync(bitmap);
         }
     }
 }
