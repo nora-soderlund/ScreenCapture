@@ -14,7 +14,11 @@ namespace CaptureScreen {
     internal class TrayApplicationContext : ApplicationContext {
         private NotifyIcon notifyIcon;
 
+        private SelectionForm selectionForm;
+
         public TrayApplicationContext() {
+            selectionForm = new SelectionForm();
+
             notifyIcon = new NotifyIcon() {
                 Icon = (Icon)Program.Resources.GetObject("Icon"),
                 Text = "Ta en skärmdump",
@@ -28,7 +32,7 @@ namespace CaptureScreen {
             Bitmap bitmap = Program.GetScreenAsBitmap();
 
             Rectangle bounds = Program.GetVirtualScreenBounds();
-            Rectangle selection = await Program.GetSelectionAsync(new Bitmap(bitmap, bounds.Size));
+            Rectangle selection = await selectionForm.GetSelectionAsync(new Bitmap(bitmap, bounds.Size));
 
             float aspectRatioWidth = (float)bitmap.Width / (float)bounds.Width;
             float aspectRatioHeight = (float)bitmap.Height / (float)bounds.Height;
@@ -52,6 +56,8 @@ namespace CaptureScreen {
                 .AddText("Image size: " + bitmap.Width + "," + bitmap.Height + "; result size: " + result.Width + ", " + result.Height)
                 .AddInlineImage(new Uri("file://" + path))
                 .Show();
+
+            selectionForm = new SelectionForm();
         }
     }
 }

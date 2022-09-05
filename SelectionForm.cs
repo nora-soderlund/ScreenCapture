@@ -25,6 +25,8 @@ namespace CaptureScreen {
             Left = 0;
             Top = 0;
 
+            ShowInTaskbar = false;
+
             FormBorderStyle = FormBorderStyle.None;
 
             StartPosition = FormStartPosition.Manual;
@@ -44,7 +46,7 @@ namespace CaptureScreen {
             Controls.Add(webView2);
         }
 
-        public async Task<Rectangle> GetRectangleAsync(Bitmap image) {
+        public async Task<Rectangle> GetSelectionAsync(Bitmap image) {
             TaskCompletionSource<Rectangle> task = new TaskCompletionSource<Rectangle>();
 
             Size = image.Size;
@@ -57,12 +59,12 @@ namespace CaptureScreen {
             webView2.CoreWebView2.Navigate("https://selection/index.html");
 
             webView2.NavigationCompleted += (object? sender, CoreWebView2NavigationCompletedEventArgs e) => {
-                Program.SelectionForm.Show();
+                Show();
 
                 webView2.NavigationStarting += (object? sender, CoreWebView2NavigationStartingEventArgs e) => {
                     e.Cancel = true;
 
-                    Program.SelectionForm.Close();
+                    Close();
 
                     string[] result = e.Uri.Substring("result://".Length).Split(',');
 

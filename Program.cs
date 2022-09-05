@@ -17,16 +17,12 @@ namespace CaptureScreen {
 
         public static string Location = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
 
-        public static SelectionForm SelectionForm;
-
         [STAThread]
         static void Main() {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
             Resources = new ResourceManager("CaptureScreen.Resources", Assembly.GetExecutingAssembly());
-
-            SelectionForm = new SelectionForm();
 
             Application.Run(new TrayApplicationContext());
         }
@@ -90,10 +86,6 @@ namespace CaptureScreen {
             Rectangle bounds = GetVirtualScreenBounds();
 
             return new Bitmap(bitmap, new Size(bounds.Width, bounds.Height));
-        }
-
-        public static async Task<Rectangle> GetSelectionAsync(Bitmap bitmap) {
-            return await Program.SelectionForm.GetRectangleAsync(bitmap);
         }
     }
 }
